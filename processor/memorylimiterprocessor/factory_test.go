@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -25,7 +26,16 @@ func TestCreateDefaultConfig(t *testing.T) {
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 }
 
+func VerifyNoLeak(t *testing.T, options ...goleak.Option) {
+	t.Helper()
+	t.Cleanup(func() {
+		goleak.VerifyNone(t, options...)
+	})
+}
+
 func TestCreateProcessor(t *testing.T) {
+	VerifyNoLeak(t)
+
 	factory := NewFactory()
 	require.NotNil(t, factory)
 
@@ -66,3 +76,4 @@ func TestCreateProcessor(t *testing.T) {
 	// calling it again should throw an error
 	assert.ErrorIs(t, lp.Shutdown(context.Background()), errShutdownNotStarted)
 }
+
