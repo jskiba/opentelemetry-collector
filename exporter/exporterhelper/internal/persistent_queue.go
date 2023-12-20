@@ -49,14 +49,15 @@ type persistentQueue[T any] struct {
 	marshaler   func(req T) ([]byte, error)
 
 	putChan  chan struct{}
-	stopChan chan struct{}
 	capacity uint64
 
+	// mu guards everything declared below.
 	mu                       sync.Mutex
 	readIndex                uint64
 	writeIndex               uint64
 	currentlyDispatchedItems []uint64
 	refClient                int64
+	stopped                  bool
 }
 
 const (
@@ -86,7 +87,6 @@ func NewPersistentQueue[T any](capacity int, dataType component.DataType, storag
 		marshaler:   marshaler,
 		capacity:    uint64(capacity),
 		putChan:     make(chan struct{}, capacity),
-		stopChan:    make(chan struct{}),
 	}
 }
 
@@ -102,6 +102,7 @@ func (pq *persistentQueue[T]) Start(ctx context.Context, host component.Host) er
 
 func (pq *persistentQueue[T]) initClient(ctx context.Context, client storage.Client) {
 	pq.client = client
+	// Start with a reference 1 which is the reference we use for the producer goroutines and initialization.
 	pq.refClient = 1
 	pq.initPersistentContiguousStorage(ctx)
 	// Make sure the leftover requests are handled
@@ -141,25 +142,18 @@ func (pq *persistentQueue[T]) initPersistentContiguousStorage(ctx context.Contex
 // Consume applies the provided function on the head of queue.
 // The call blocks until there is an item available or the queue is stopped.
 // The function returns true when an item is consumed or false if the queue is stopped.
-func (pq *persistentQueue[T]) Consume(consumeFunc func(context.Context, T) bool) bool {
-	var (
-		req                  T
-		onProcessingFinished func()
-		consumed             bool
-	)
-
+func (pq *persistentQueue[T]) Consume(consumeFunc func(context.Context, T) error) bool {
 	for {
-		select {
-		case <-pq.stopChan:
+		// If we are stopped we still process all the other events in the channel before, but we
+		// return fast in the `getNextItem`, so we will free the channel fast and get to the stop.
+		_, ok := <-pq.putChan
+		if !ok {
 			return false
-		case <-pq.putChan:
-			req, onProcessingFinished, consumed = pq.getNextItem(context.Background())
 		}
 
+		req, onProcessingFinished, consumed := pq.getNextItem(context.Background())
 		if consumed {
-			if ok := consumeFunc(context.Background(), req); ok {
-				onProcessingFinished()
-			}
+			onProcessingFinished(consumeFunc(context.Background(), req))
 			return true
 		}
 	}
@@ -182,10 +176,11 @@ func (pq *persistentQueue[T]) Capacity() int {
 }
 
 func (pq *persistentQueue[T]) Shutdown(ctx context.Context) error {
-	close(pq.stopChan)
-	// Hold the lock only for `refClient`.
+	close(pq.putChan)
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
+	// Mark this queue as stopped, so consumer don't start any more work.
+	pq.stopped = true
 	return pq.unrefClient(ctx)
 }
 
@@ -241,24 +236,23 @@ func (pq *persistentQueue[T]) putInternal(ctx context.Context, req T) error {
 
 // getNextItem pulls the next available item from the persistent storage along with a callback function that should be
 // called after the item is processed to clean up the storage. If no new item is available, returns false.
-func (pq *persistentQueue[T]) getNextItem(ctx context.Context) (T, func(), bool) {
+func (pq *persistentQueue[T]) getNextItem(ctx context.Context) (T, func(error), bool) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 
 	var request T
 
-	// If called in the same time with Shutdown, make sure client is not closed.
-	if pq.refClient <= 0 {
+	if pq.stopped {
 		return request, nil, false
 	}
 
 	if pq.readIndex == pq.writeIndex {
 		return request, nil, false
 	}
+
 	index := pq.readIndex
 	// Increase here, so even if errors happen below, it always iterates
 	pq.readIndex++
-
 	pq.currentlyDispatchedItems = append(pq.currentlyDispatchedItems, index)
 	getOp := storage.GetOperation(getItemKey(index))
 	err := pq.client.Batch(ctx,
@@ -281,17 +275,29 @@ func (pq *persistentQueue[T]) getNextItem(ctx context.Context) (T, func(), bool)
 	}
 
 	// Increase the reference count, so the client is not closed while the request is being processed.
+	// The client cannot be closed because we hold the lock since last we checked `stopped`.
 	pq.refClient++
-	return request, func() {
+	return request, func(consumeErr error) {
 		// Delete the item from the persistent storage after it was processed.
 		pq.mu.Lock()
-		defer pq.mu.Unlock()
+		// Always unref client even if the consumer is shutdown because we always ref it for every valid request.
+		defer func() {
+			if err = pq.unrefClient(ctx); err != nil {
+				pq.set.Logger.Error("Error closing the storage client", zap.Error(err))
+			}
+			pq.mu.Unlock()
+		}()
+
+		if errors.As(consumeErr, &shutdownErr{}) {
+			// The queue is shutting down, don't mark the item as dispatched, so it's picked up again after restart.
+			// TODO: Handle partially delivered requests by updating their values in the storage.
+			return
+		}
+
 		if err = pq.itemDispatchingFinish(ctx, index); err != nil {
 			pq.set.Logger.Error("Error deleting item from queue", zap.Error(err))
 		}
-		if err = pq.unrefClient(ctx); err != nil {
-			pq.set.Logger.Error("Error closing the storage client", zap.Error(err))
-		}
+
 	}, true
 }
 
@@ -423,9 +429,8 @@ func itemIndexToBytes(value uint64) []byte {
 }
 
 func bytesToItemIndex(buf []byte) (uint64, error) {
-	val := uint64(0)
 	if buf == nil {
-		return val, errValueNotSet
+		return uint64(0), errValueNotSet
 	}
 	// The sizeof uint64 in binary is 8.
 	if len(buf) < 8 {

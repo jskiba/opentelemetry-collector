@@ -84,6 +84,7 @@ require (
 	go.opentelemetry.io/collector/config/confighttp v0.91.0 // indirect
 	go.opentelemetry.io/collector/config/confignet v0.91.0 // indirect
 	go.opentelemetry.io/collector/config/configopaque v0.91.0 // indirect
+	go.opentelemetry.io/collector/config/configretry v0.91.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.91.0 // indirect
 	go.opentelemetry.io/collector/config/configtls v0.91.0 // indirect
 	go.opentelemetry.io/collector/config/internal v0.91.0 // indirect
@@ -121,7 +122,7 @@ require (
 	gonum.org/v1/gonum v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231127180814-3a041ad873d4 // indirect
-	google.golang.org/grpc v1.60.0 // indirect
+	google.golang.org/grpc v1.60.1 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -144,6 +145,8 @@ replace go.opentelemetry.io/collector/config/confighttp => ../../config/confight
 replace go.opentelemetry.io/collector/config/confignet => ../../config/confignet
 
 replace go.opentelemetry.io/collector/config/configopaque => ../../config/configopaque
+
+replace go.opentelemetry.io/collector/config/configretry => ../../config/configretry
 
 replace go.opentelemetry.io/collector/config/configtelemetry => ../../config/configtelemetry
 

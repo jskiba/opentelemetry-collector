@@ -18,7 +18,7 @@ require (
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/sys v0.15.0
-	google.golang.org/grpc v1.60.0
+	google.golang.org/grpc v1.60.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -126,3 +126,5 @@ replace go.opentelemetry.io/collector/receiver => ../receiver
 replace go.opentelemetry.io/collector/featuregate => ../featuregate
 
 replace go.opentelemetry.io/collector/config/confignet => ../config/confignet
+
+replace go.opentelemetry.io/collector/config/configretry => ../config/configretry

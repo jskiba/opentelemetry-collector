@@ -28,6 +28,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/collector v0.91.0 // indirect
+	go.opentelemetry.io/collector/config/configretry v0.91.0 // indirect
 	go.opentelemetry.io/collector/consumer v0.91.0 // indirect
 	go.opentelemetry.io/collector/extension v0.91.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.0.0 // indirect
@@ -42,7 +43,7 @@ require (
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97 // indirect
-	google.golang.org/grpc v1.60.0 // indirect
+	google.golang.org/grpc v1.60.1 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -65,8 +66,8 @@ replace go.opentelemetry.io/collector/receiver => ../../receiver
 
 replace go.opentelemetry.io/collector/extension => ../../extension
 
-replace go.opentelemetry.io/collector/connector => ../../connector
-
 replace go.opentelemetry.io/collector/processor => ../../processor
 
 replace go.opentelemetry.io/collector/config/configtelemetry => ../../config/configtelemetry
+
+replace go.opentelemetry.io/collector/config/configretry => ../../config/configretry
